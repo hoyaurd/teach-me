@@ -7,6 +7,9 @@
 //
 // Point rouge : quand quelqu'un répond à ma demande, "reponseVue" passe à
 // false (point rouge chez moi). En ouvrant cette page, je la marque "vue".
+//
+// NOUVEAU : quand j'accepte ou refuse une demande, celui qui l'avait envoyée
+// reçoit une notification push "Vous avez une nouvelle notification".
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -31,6 +34,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
+// NOUVEAU : pour envoyer la notification push
+import { envoyerPush } from "../../lib/notification";
 // Choisit la bonne page de publication selon le profil (comme sur l'accueil)
 import { getRoutePublier } from "../../lib/Profil";
 
@@ -138,7 +143,7 @@ export default function EcranNotification() {
 
         setReponses(liste);
 
-        // NOUVEAU : ces réponses sont affichées à l'écran, donc je les
+        // Ces réponses sont affichées à l'écran, donc je les
         // marque comme "vues" (le point rouge disparaît).
         liste.forEach((d: any) => {
           if (d.reponseVue === false) {
@@ -165,7 +170,12 @@ export default function EcranNotification() {
 
   // Enregistre ma réponse : "acceptee" ou "refusee".
   // On enregistre aussi MON nom, pour que l'autre sache qui a répondu.
-  async function repondre(idDemande: string, statut: "acceptee" | "refusee") {
+  // idExpediteur = uid de celui qui avait envoyé la demande (il sera notifié).
+  async function repondre(
+    idDemande: string,
+    statut: "acceptee" | "refusee",
+    idExpediteur: string,
+  ) {
     try {
       // 1. Je récupère mon nom dans la collection "utilisateurs"
       const moi = getAuth().currentUser;
@@ -189,13 +199,19 @@ export default function EcranNotification() {
       }
 
       // 2. J'enregistre la réponse avec mon nom.
-      // NOUVEAU : reponseVue = false -> point rouge chez celui qui avait
+      // reponseVue = false -> point rouge chez celui qui avait
       // envoyé la demande, jusqu'à ce qu'il ouvre ses notifications.
       await updateDoc(doc(db, "demandes", idDemande), {
         statut,
         repondeParNom: monNom,
         reponseVue: false,
       });
+
+      // 3. NOUVEAU : notification push pour celui qui avait envoyé la demande
+      // (il la reçoit même si son app est fermée).
+      if (idExpediteur) {
+        envoyerPush(idExpediteur, "Vous avez une nouvelle notification");
+      }
     } catch (erreur) {
       console.log("Erreur réponse demande :", erreur);
       Alert.alert("Erreur", "Impossible d'enregistrer ta réponse. Réessaie.");
@@ -270,14 +286,14 @@ export default function EcranNotification() {
             <View style={styles.boutons}>
               <TouchableOpacity
                 style={[styles.bouton, styles.boutonAccepter]}
-                onPress={() => repondre(item.id, "acceptee")}
+                onPress={() => repondre(item.id, "acceptee", item.deId)}
               >
                 <Text style={styles.boutonTexte}>Accepter la demande</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.bouton, styles.boutonRefuser]}
-                onPress={() => repondre(item.id, "refusee")}
+                onPress={() => repondre(item.id, "refusee", item.deId)}
               >
                 <Text style={styles.boutonTexteRefuser}>
                   Refuser la demande

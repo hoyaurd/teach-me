@@ -10,6 +10,9 @@
 // - pas encore de demande acceptée -> "Envoyer une demande"
 // - demande acceptée (dans un sens ou dans l'autre) ->
 //   deux boutons : "Contacter" (appel) et "Message" (ouvre la discussion)
+//
+// NOUVEAU : quand j'envoie une demande, l'autre personne reçoit une
+// notification push "Vous avez une nouvelle notification".
 
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -37,6 +40,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
+// NOUVEAU : pour envoyer la notification push
+import { envoyerPush } from "../../lib/notification";
 
 // Couleur principale de l'app (bleu Teach-Me).
 const BLEU = "#2E3FCB";
@@ -215,6 +220,10 @@ export default function EcranProfil() {
         creeLe: serverTimestamp(),
       });
 
+      // 5. NOUVEAU : notification push pour le destinataire
+      // (il la reçoit même si son app est fermée).
+      envoyerPush(id, "Vous avez une nouvelle notification");
+
       setDemandeEnvoyee(true);
       Alert.alert("Demande envoyée", `Ta demande a bien été envoyée à ${nom}.`);
     } catch (erreur) {
@@ -237,7 +246,7 @@ export default function EcranProfil() {
     Linking.openURL(`tel:${telephone}`);
   }
 
-  // MODIFIÉ : "Message" -> ouvre directement la DISCUSSION avec cette personne
+  // "Message" -> ouvre directement la DISCUSSION avec cette personne
   // (et non plus la liste Messages), en indiquant son id, son nom et sa photo.
   function envoyerMessage() {
     router.push({

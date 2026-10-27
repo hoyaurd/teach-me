@@ -15,6 +15,9 @@
 // "nonLuPar" = uid de la personne qui n'a pas encore lu le dernier message.
 // Il est rempli à l'envoi, et vidé quand l'autre voit le message
 // (c'est ce qui allume / éteint le point rouge de notification).
+//
+// NOUVEAU : à chaque message envoyé, l'autre personne reçoit une
+// notification push "Vous avez un nouveau message" (même app fermée).
 
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -47,6 +50,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
+// NOUVEAU : pour envoyer la notification push
+import { envoyerPush } from "../../lib/notification";
 
 const BLEU = "#2E3FCB";
 const GRIS = "#8A8A8A";
@@ -211,7 +216,11 @@ export default function DiscussionScreen() {
         creeLe: serverTimestamp(),
       });
 
-      // 3. La conversation existe maintenant : on commence à l'écouter.
+      // 3. NOUVEAU : notification push pour l'autre personne
+      // (elle la reçoit même si son app est fermée).
+      envoyerPush(id, "Vous avez un nouveau message");
+
+      // 4. La conversation existe maintenant : on commence à l'écouter.
       setConversationPrete(true);
     } catch (erreur) {
       console.log("Erreur envoi message :", erreur);
