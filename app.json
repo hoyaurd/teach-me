@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Teach-Me",
+    "slug": "Teach-Me",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icone_hiboux.png",
+    "scheme": "teachme",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/expo.icon"
+    },
+    "android": {
+      "package": "com.levi.teachme",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/icone_hiboux.png",
+        "backgroundImage": "./assets/images/icone_hiboux.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/icone_hiboux.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-image",
+      "expo-web-browser",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "46ab0b68-fd58-473e-834b-98f5b998731a"
+      }
+    },
+    "owner": "12kleuen"
+  }
+}
