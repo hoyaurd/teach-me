@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -16,31 +15,35 @@ import {
 } from "react-native";
 // NOUVEAU : fonction qui enregistre la publication dans Firestore
 import { creerPublication } from "../../lib/publications";
+import { alerte } from "../../lib/alerte";
 
-// --- Tarifs horaires proposés ---
-const TARIFS_HORAIRES = [
-  "0 – 50 000 FCFA",
-  "50 000 – 100 000 FCFA",
-  "100 000 – 150 000 FCFA",
-  "150 000 – 200 000 FCFA",
-  "200 000 – 300 000 FCFA",
-  "300 000 – 500 000 FCFA",
-  "500 000 – 750 000 FCFA",
-  "750 000 – 1 000 000 FCFA",
-  "Plus de 1 000 000 FCFA",
+// --- Adresse de l'API d'estimation (le fichier api_estimation.py) ---
+// Émulateur Android : http://10.0.2.2:5000
+// Vrai téléphone    : http://IP-DE-TON-PC:5000
+//   (dans PowerShell, tape "ipconfig" et regarde la ligne "Adresse IPv4")
+// Le PC et le téléphone doivent être sur le même Wi-Fi.
+const URL_API = "http://10.0.2.2:5000";
+
+// --- Tarifs horaires proposés (FCFA) ---
+// Ce sont EXACTEMENT les tranches que le modèle connaît.
+const TARIFS_HORAIRES = ["0 - 50 000", "50 000 - 100 000", "100 000 - 150 000"];
+
+// --- Matières proposées ---
+// Ce sont les matières que le modèle connaît.
+const MATIERES = [
+  "Anglais",
+  "Français",
+  "Informatique",
+  "Mathématiques",
+  "Physique-Chimie",
+  "SVT",
 ];
 
-// --- Modes de travail proposés (sélection multiple) ---
-const TYPE_DE_REMUNERATION = [
-  "Par séance",
-  "Par heure",
-  "Par mois",
-  "Par année",
-  "Tous",
-];
+// --- Moyens de paiement proposés (sélection multiple) ---
+const TYPE_DE_REMUNERATION = ["Espèces", "Mobile Money"];
 
 // --- Lieux de travail proposés (sélection multiple) ---
-const LIEUX_DE_TRAVAIL = ["En ligne", "En présentiel", "Tous"];
+const LIEUX_DE_TRAVAIL = ["En ligne", "Présentiel"];
 
 // --- Niveaux enseignés proposés (sélection multiple) ---
 // Adapte cette liste si tu veux d'autres niveaux (système ivoirien par défaut).
@@ -72,7 +75,7 @@ const NIVEAUX_ENSEIGNES = [
 ];
 
 // --- Liste déroulante à choix UNIQUE (aucune dépendance externe) ---
-// Utilisée pour le tarif horaire. Le champ ressemble à un TextInput ;
+// Utilisée pour la matière et le tarif horaire. Le champ ressemble à un TextInput ;
 // au clic, une modale s'ouvre avec les choix possibles.
 type DropdownProps = {
   placeholder: string;
@@ -219,7 +222,7 @@ export default function BioAccompagnateurScreen() {
 
   // --- Champs du formulaire de bio ---
   const [presentation, setPresentation] = useState(""); // texte libre, la "bio" principale
-  const [matiereEnseignee, setMatiereEnseignee] = useState(""); // texte libre, ce que l'accompagnateur enseigne
+  const [matiereEnseignee, setMatiereEnseignee] = useState(""); // choisie dans la liste déroulante
   const [niveauEnseigne, setNiveauEnseigne] = useState<string[]>([]); // cases cochées (plusieurs niveaux possibles)
   const [tarifHoraire, setTarifHoraire] = useState(""); // choisi dans la liste déroulante
   const [experience, setExperience] = useState(""); // diplômes / années d'expérience
@@ -229,15 +232,65 @@ export default function BioAccompagnateurScreen() {
   // true pendant l'enregistrement (désactive le bouton)
   const [loading, setLoading] = useState(false);
 
+  // --- Estimation du prix par le modèle ---
+  const [estimation, setEstimation] = useState(""); // ex : "50 000 - 100 000"
+  const [estimationEnCours, setEstimationEnCours] = useState(false);
+
+  // À chaque fois que l'accompagnateur change un choix, on redemande
+  // l'estimation à l'API. Si l'API ne répond pas, ce n'est pas grave :
+  // le formulaire marche quand même, on affiche juste "indisponible".
+  useEffect(() => {
+    // Sans matière ni niveau, on ne demande rien
+    if (!matiereEnseignee || niveauEnseigne.length === 0) {
+      setEstimation("");
+      return;
+    }
+
+    let annule = false; // devient true si les choix changent entre-temps
+    const controleur = new AbortController();
+    const minuteur = setTimeout(() => controleur.abort(), 5000); // 5 s max
+
+    setEstimationEnCours(true);
+    fetch(`${URL_API}/estimer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        matiere: matiereEnseignee,
+        niveau: niveauEnseigne,
+        lieuTravail: lieuDeTravail,
+        remuneration: modeDeTravail,
+      }),
+      signal: controleur.signal,
+    })
+      .then((reponse) => reponse.json())
+      .then((data) => {
+        if (!annule) setEstimation(data.tranche ?? "");
+      })
+      .catch(() => {
+        if (!annule) setEstimation(""); // API éteinte, pas de réseau...
+      })
+      .finally(() => {
+        clearTimeout(minuteur);
+        if (!annule) setEstimationEnCours(false);
+      });
+
+    // Nettoyage : on annule l'ancienne demande si un choix change
+    return () => {
+      annule = true;
+      controleur.abort();
+      clearTimeout(minuteur);
+    };
+  }, [matiereEnseignee, niveauEnseigne, lieuDeTravail, modeDeTravail]);
+
   // --- Validation puis enregistrement dans Firestore ---
   const handleSave = async () => {
     if (!presentation.trim()) {
-      Alert.alert("Champ manquant", "La présentation est obligatoire.");
+      alerte("Champ manquant", "La présentation est obligatoire.");
       return;
     }
 
     if (!matiereEnseignee.trim()) {
-      Alert.alert("Champ manquant", "La matière enseignée est obligatoire.");
+      alerte("Champ manquant", "La matière enseignée est obligatoire.");
       return;
     }
 
@@ -258,7 +311,7 @@ export default function BioAccompagnateurScreen() {
 
       // L'alerte s'affiche seulement si l'enregistrement a réussi,
       // puis on redirige vers l'accueil quand l'utilisateur appuie sur "OK".
-      Alert.alert("Succès", "Publication réussie !", [
+      alerte("Succès", "Publication réussie !", [
         {
           text: "OK",
           onPress: () => router.push("/Acceuil"),
@@ -266,7 +319,7 @@ export default function BioAccompagnateurScreen() {
       ]);
     } catch (erreur) {
       console.log("Erreur publication :", erreur);
-      Alert.alert("Erreur", "Impossible de publier. Réessaie.");
+      alerte("Erreur", "Impossible de publier. Réessaie.");
     } finally {
       setLoading(false); // on réactive le bouton dans tous les cas
     }
@@ -301,14 +354,13 @@ export default function BioAccompagnateurScreen() {
           numberOfLines={5}
         />
 
-        {/* Matière enseignée (texte libre) */}
+        {/* Matière enseignée (liste déroulante, choix unique) */}
         <Text style={styles.label}>Matière enseignée</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex : Mathématiques,Economie,.."
-          placeholderTextColor="#9AA0C4"
+        <Dropdown
+          placeholder="Choisir une matière"
           value={matiereEnseignee}
-          onChangeText={setMatiereEnseignee}
+          options={MATIERES}
+          onSelect={setMatiereEnseignee}
         />
 
         {/* Niveau enseigné (cases à cocher) */}
@@ -318,15 +370,6 @@ export default function BioAccompagnateurScreen() {
           values={niveauEnseigne}
           options={NIVEAUX_ENSEIGNES}
           onChange={setNiveauEnseigne}
-        />
-
-        {/* Tarif horaire (liste déroulante, choix unique) */}
-        <Text style={styles.label}>Tarif horaire</Text>
-        <Dropdown
-          placeholder="Choisir un tarif"
-          value={tarifHoraire}
-          options={TARIFS_HORAIRES}
-          onSelect={setTarifHoraire}
         />
 
         {/* Expérience / diplômes */}
@@ -357,6 +400,33 @@ export default function BioAccompagnateurScreen() {
           values={lieuDeTravail}
           options={LIEUX_DE_TRAVAIL}
           onChange={setLieuDeTravail}
+        />
+
+        {/* Prix conseillé par le modèle : visible dès que la matière et
+            le niveau sont choisis */}
+        {matiereEnseignee && niveauEnseigne.length > 0 ? (
+          <View style={styles.estimationBoite}>
+            <View style={styles.estimationTitreLigne}>
+              <Ionicons name="bulb-outline" size={18} color="#3B45D1" />
+              <Text style={styles.estimationTitre}>Prix conseillé</Text>
+            </View>
+            <Text style={styles.estimationValeur}>
+              {estimationEnCours
+                ? "Calcul en cours..."
+                : estimation
+                  ? `${estimation} FCFA`
+                  : "Estimation indisponible pour le moment"}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Tarif horaire (liste déroulante, choix unique) */}
+        <Text style={styles.label}>Tarif horaire (FCFA)</Text>
+        <Dropdown
+          placeholder="Choisir un tarif"
+          value={tarifHoraire}
+          options={TARIFS_HORAIRES}
+          onSelect={setTarifHoraire}
         />
 
         {/* Bouton d'enregistrement */}
@@ -444,6 +514,31 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 17,
     fontWeight: "700",
+  },
+  // --- Encadré "Prix conseillé" ---
+  estimationBoite: {
+    marginTop: 24,
+    borderWidth: 1.5,
+    borderColor: "#3B45D1",
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: "#fff",
+  },
+  estimationTitreLigne: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  estimationTitre: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#3B45D1",
+  },
+  estimationValeur: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2E3AC0",
   },
   // --- Styles de la fenêtre modale (listes déroulantes) ---
   modalFond: {

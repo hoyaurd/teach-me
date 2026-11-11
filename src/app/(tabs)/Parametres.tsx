@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +8,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { alerte } from "../../lib/alerte";
+import { signOut } from "firebase/auth";
+import { auth } from "../../lib/firebase";
 
 // Couleur principale de l'app (bleu Teach-Me).
 const BLEU = "#2E3FCB";
@@ -19,7 +21,7 @@ const ROUGE = "#E63946"; // utilisé uniquement pour "Se déconnecter"
 // portent un nom différent dans ton dossier app/.
 const ROUTES = {
   monCompte: "/Profil",
-  historiqueIA: "/Historique_IA",
+  historiqueIA: "/Historique IA",
   apropos: "/A_propos",
 };
 
@@ -40,15 +42,16 @@ export default function EcranParametres() {
 
   // Demande confirmation avant de déconnecter l'utilisateur.
   function seDeconnecter() {
-    Alert.alert("Se déconnecter", "Es-tu sûr de vouloir te déconnecter ?", [
+    alerte("Se déconnecter", "Es-tu sûr de vouloir te déconnecter ?", [
       { text: "Annuler", style: "cancel" },
       {
         text: "Se déconnecter",
         style: "destructive",
         onPress: () => {
-          // TODO: remplacer par ta vraie logique de déconnexion
-          // (ex: suppression du token, appel à ton contexte d'auth...)
-          router.replace("/");
+          // Déconnecte vraiment l'utilisateur dans Firebase, puis retour à l'accueil
+          signOut(auth)
+            .catch(() => {})
+            .finally(() => router.replace("/"));
         },
       },
     ]);

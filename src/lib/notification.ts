@@ -16,6 +16,9 @@ import { auth, db } from "./firebase";
 let Notifications: any = null;
 
 try {
+  // Sur le site web, les notifications Expo n'existent pas : on ne charge rien
+  if (Platform.OS === "web") throw new Error("Notifications Expo non disponibles sur le web");
+
   Notifications = require("expo-notifications");
 
   // Comment la notification s'affiche quand l'app est ouverte
@@ -29,10 +32,12 @@ try {
     }),
   });
 } catch (erreur) {
-  console.log(
-    "expo-notifications indisponible : les notifications sont désactivées.",
-    erreur,
-  );
+  if (Platform.OS !== "web") {
+    console.log(
+      "expo-notifications indisponible : les notifications sont désactivées.",
+      erreur,
+    );
+  }
   Notifications = null;
 }
 

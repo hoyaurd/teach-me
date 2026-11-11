@@ -8,10 +8,12 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -20,6 +22,10 @@ import { auth } from "../../src/lib/firebase";
 
 export default function LoginScreen() {
   const router = useRouter();
+
+  // Site web grand écran : image à gauche, formulaire à droite
+  const { width } = useWindowDimensions();
+  const grand = Platform.OS === "web" && width >= 900;
 
   // Ce que l'utilisateur tape
   const [email, setEmail] = useState("");
@@ -112,11 +118,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, grand && { flexDirection: "row" }]}>
       {/* Image du haut */}
       <Image
         source={require("../../assets/images/Image_page_de_connection.jpeg")}
-        style={styles.image}
+        style={[styles.image, grand && { width: "50%", height: "100%" }]}
         resizeMode="cover"
       />
 
@@ -126,7 +132,19 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       {/* Carte blanche avec le formulaire */}
-      <View style={styles.card}>
+      <View
+        style={[
+          styles.card,
+          // Grand écran : formulaire centré (420 px max) dans la moitié droite
+          grand && {
+            marginTop: 0,
+            borderRadius: 0,
+            paddingTop: 0,
+            justifyContent: "center",
+            paddingHorizontal: Math.max(40, Math.round((width / 2 - 420) / 2)),
+          },
+        ]}
+      >
         <Text style={styles.title}>Se connecter</Text>
 
         {/* Champ Adresse email */}

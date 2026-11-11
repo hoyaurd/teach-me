@@ -38,7 +38,6 @@ import {
 } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   ScrollView,
@@ -52,6 +51,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
 // NOUVEAU : pour envoyer la notification push
 import { envoyerPush } from "../../lib/notification";
+import { alerte } from "../../lib/alerte";
 
 const BLEU = "#2E3FCB";
 const GRIS = "#8A8A8A";
@@ -225,7 +225,7 @@ export default function DiscussionScreen() {
     } catch (erreur) {
       console.log("Erreur envoi message :", erreur);
       setTexteSaisi(message); // on remet le texte pour ne pas le perdre
-      Alert.alert("Erreur", "Impossible d'envoyer le message. Réessaie.");
+      alerte("Erreur", "Impossible d'envoyer le message. Réessaie.");
     }
   }
 

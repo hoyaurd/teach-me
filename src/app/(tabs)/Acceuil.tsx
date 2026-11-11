@@ -2,6 +2,13 @@
 // Page d'accueil : liste des publications (services et demandes),
 // barre de recherche et barre de navigation du bas.
 //
+// RECHERCHE :
+// - Quand on tape dans la barre de recherche, la liste est filtrée
+//   en direct selon le NOM, la MATIÈRE ou le NIVEAU.
+// - Les majuscules et les accents sont ignorés
+//   ("francais" trouve "Français").
+// - Barre vide : toutes les publications sont affichées.
+//
 // Points rouges dans la barre du bas :
 // - Notification : nouvelle demande ou réponse à ma demande
 // - Messages : message reçu non lu
@@ -46,6 +53,12 @@ import {
 import { db } from "../../lib/firebase";
 // Fonction qui choisit la bonne page de publication selon le profil
 import { getRoutePublier } from "../../lib/Profil";
+// Menu latéral du site web (PC / tablette) : grille de cartes à la place de la liste
+import {
+  LARGEUR_MAX_GRILLE,
+  LARGEUR_MENU,
+  useBarreLaterale,
+} from "../../lib/useBarreLaterale";
 
 // Points rouges : nouvelle notification (demande) et nouveau message
 import {
@@ -71,7 +84,6 @@ const GROSSISSEMENT_MAX = 1.2;
 const ROUTES = {
   // Route vers le profil détaillé d'un accompagnateur consulté depuis la liste.
   profil: "/Detail_Profil",
-  filtre: "/Filtre",
   chatBot: "/Chat_Bot",
   parametres: "/Parametres",
   messages: "/Messages",
@@ -132,10 +144,23 @@ function enTexte(valeur) {
   return valeur ?? "";
 }
 
+// Prépare un texte pour la recherche : tout en minuscules et sans accents.
+// Exemple : "Français" devient "francais".
+// Ainsi "FRANÇAIS", "français" et "francais" sont considérés identiques.
+function normaliser(texte) {
+  return (texte ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 // Une carte de publication sur l'accueil.
 // Elle va chercher la photo de l'auteur à partir de son uid.
 // "styles" et "t" viennent de l'écran principal (tailles adaptées à l'écran).
-function CartePublication({ pub, onPress, styles, t }) {
+// grille / largeurCarte : sur le site web grand écran, la carte est un bloc
+// encadré de largeur fixe (plusieurs cartes par ligne).
+function CartePublication({ pub, onPress, styles, t, grille, largeurCarte }) {
   const [photo, setPhoto] = useState("");
 
   useEffect(() => {
@@ -150,7 +175,17 @@ function CartePublication({ pub, onPress, styles, t }) {
 
   return (
     <TouchableOpacity
-      style={styles.carteAccompagnateur}
+      style={[
+        styles.carteAccompagnateur,
+        grille && {
+          width: largeurCarte,
+          borderWidth: 1,
+          borderColor: "#E0E0E0",
+          borderRadius: 16,
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+        },
+      ]}
       activeOpacity={0.7}
       onPress={onPress}
     >
@@ -236,9 +271,30 @@ export default function EcranAccueil() {
   // Les styles sont recalculés seulement si l'échelle change
   const styles = useMemo(() => creerStyles(echelle), [echelle]);
 
+  // --- Site web grand écran : menu latéral + grille de cartes ---
+  // barreLaterale = true sur PC / tablette (web). Sur téléphone : false, rien ne change.
+  const barreLaterale = useBarreLaterale();
+  const ESPACE_GRILLE = 16;
+  // Largeur de la zone de contenu (écran moins le menu, limitée à 1200 px)
+  const largeurZone = Math.min(width - LARGEUR_MENU, LARGEUR_MAX_GRILLE);
+  // 3 colonnes sur grand PC, 2 sur PC / tablette, 1 sinon
+  const colonnes = !barreLaterale
+    ? 1
+    : largeurZone >= 1000
+      ? 3
+      : largeurZone >= 640
+        ? 2
+        : 1;
+  // Largeur d'une carte (20 px de marge pour la barre de défilement)
+  const largeurCarte = Math.floor(
+    (largeurZone - 20 - ESPACE_GRILLE * 2 - ESPACE_GRILLE * (colonnes - 1)) /
+      colonnes,
+  );
+
   // Hauteur réelle de la barre du bas (pour placer le bouton flottant)
   const [hauteurBarre, setHauteurBarre] = useState(80);
 
+  // Texte tapé dans la barre de recherche
   const [recherche, setRecherche] = useState("");
   const [ongletActif, setOngletActif] = useState("Accueil");
 
@@ -251,7 +307,7 @@ export default function EcranAccueil() {
   const [publications, setPublications] = useState([]);
 
   // Écoute la collection "publications" en temps réel :
-  // dès que quelqu'un publie, la liste se met à jour toute seule.
+  // dès que quelqu'un publie (ou supprime), la liste se met à jour toute seule.
   useEffect(() => {
     const q = query(collection(db, "publications"), orderBy("creeLe", "desc"));
 
@@ -267,6 +323,22 @@ export default function EcranAccueil() {
     return arreter;
   }, []);
 
+  // Liste filtrée par la recherche.
+  // Une publication est gardée si le texte tapé apparaît dans son
+  // nom, sa matière ou son niveau. Barre vide : on garde tout.
+  // Elle est recalculée seulement quand "publications" ou "recherche" change.
+  const publicationsFiltrees = useMemo(() => {
+    const mot = normaliser(recherche.trim());
+    if (mot === "") return publications; // barre vide : on montre tout
+
+    return publications.filter(
+      (pub) =>
+        normaliser(pub.nom).includes(mot) ||
+        normaliser(pub.matiere).includes(mot) ||
+        normaliser(texteNiveau(pub.niveau)).includes(mot),
+    );
+  }, [publications, recherche]);
+
   // Ouvre l'écran de détail de la publication cliquée.
   // On envoie TOUTES les infos de la publication
   // (tarif, rémunération, lieu de cours, expérience, précisions, type).
@@ -277,6 +349,7 @@ export default function EcranAccueil() {
       pathname: ROUTES.profil,
       params: {
         id: pub.uid, // identifiant de l'auteur
+        pubId: pub.id, // NOUVEAU : identifiant de la publication (pour la supprimer)
         nom: pub.nom ?? "",
         photo: "", // la photo est chargée par la carte, pas passée en paramètre
         matiere: pub.matiere ?? "",
@@ -293,10 +366,6 @@ export default function EcranAccueil() {
         precisions: pub.precisions ?? "", // présent seulement pour une demande
       },
     });
-  }
-
-  function ouvrirFiltre() {
-    router.push(ROUTES.filtre);
   }
 
   function allerAuChatBot() {
@@ -332,11 +401,17 @@ export default function EcranAccueil() {
     // le bas est géré à la main sur la barre de navigation.
     <SafeAreaView style={styles.conteneur} edges={["top", "left", "right"]}>
       {/* ---------- Colonne principale (centrée et limitée sur tablette) ---------- */}
-      <View style={styles.colonne}>
+      <View style={[styles.colonne, barreLaterale && { maxWidth: "100%" }]}>
         {/* ---------- En-tête : logo + bouton paramètres ---------- */}
         <View style={styles.entete}>
           <Text style={styles.logo} maxFontSizeMultiplier={GROSSISSEMENT_MAX}>
-            Teach<Text style={styles.logoTrait}>-</Text>Me
+            {barreLaterale ? (
+              "Accueil"
+            ) : (
+              <>
+                Teach<Text style={styles.logoTrait}>-</Text>Me
+              </>
+            )}
           </Text>
           <TouchableOpacity hitSlop={12} onPress={ouvrirParametres}>
             <Ionicons name="settings-outline" size={t(22)} color="#000000" />
@@ -344,7 +419,9 @@ export default function EcranAccueil() {
         </View>
 
         {/* ---------- Barre de recherche ---------- */}
-        <View style={styles.barreRecherche}>
+        <View
+          style={[styles.barreRecherche, barreLaterale && { maxWidth: 640 }]}
+        >
           <Ionicons name="search" size={t(20)} color={GRIS} />
           <TextInput
             style={styles.champRecherche}
@@ -354,27 +431,42 @@ export default function EcranAccueil() {
             placeholderTextColor={GRIS}
             maxFontSizeMultiplier={GROSSISSEMENT_MAX}
           />
-          <TouchableOpacity hitSlop={12} onPress={ouvrirFiltre}>
-            <Ionicons name="options-outline" size={t(20)} color="#000000" />
-          </TouchableOpacity>
         </View>
 
         {/* ---------- Liste des publications (services et demandes) ---------- */}
         <ScrollView
           style={styles.contenu}
           // Le bas de la liste laisse la place du bouton flottant
-          contentContainerStyle={{ paddingBottom: t(90) }}
+          contentContainerStyle={
+            barreLaterale
+              ? {
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: ESPACE_GRILLE,
+                  padding: ESPACE_GRILLE,
+                  paddingBottom: 40,
+                }
+              : { paddingBottom: t(90) }
+          }
           showsVerticalScrollIndicator={false}
+          // Permet de toucher une carte même si le clavier est ouvert
+          keyboardShouldPersistTaps="handled"
         >
-          {publications.length === 0 ? (
-            <Text style={styles.vide}>Aucune publication pour le moment.</Text>
+          {publicationsFiltrees.length === 0 ? (
+            <Text style={styles.vide}>
+              {publications.length === 0
+                ? "Aucune publication pour le moment."
+                : "Aucun résultat pour cette recherche."}
+            </Text>
           ) : (
-            publications.map((pub) => (
+            publicationsFiltrees.map((pub) => (
               <CartePublication
                 key={pub.id}
                 pub={pub}
                 styles={styles}
                 t={t}
+                grille={barreLaterale}
+                largeurCarte={largeurCarte}
                 onPress={() => ouvrirProfil(pub)}
               />
             ))
@@ -385,7 +477,12 @@ export default function EcranAccueil() {
       {/* ---------- Bouton flottant : redirige vers le chatbot ----------
           Il se place toujours juste au-dessus de la barre du bas. */}
       <TouchableOpacity
-        style={[styles.boutonFlottant, { bottom: hauteurBarre + 16 }]}
+        style={[
+          styles.boutonFlottant,
+          { bottom: hauteurBarre + 16 },
+          // Sur le site web grand écran, l'assistant est dans le menu latéral
+          barreLaterale && { display: "none" },
+        ]}
         activeOpacity={0.85}
         onPress={allerAuChatBot}
       >
@@ -402,6 +499,8 @@ export default function EcranAccueil() {
           styles.barreNavigation,
           // Respecte la barre de gestes (iPhone) et les boutons (Android)
           { paddingBottom: Math.max(insets.bottom, 12) + t(4) },
+          // Site web grand écran : le menu latéral remplace la barre du bas
+          barreLaterale && { display: "none" },
         ]}
         // On mesure la hauteur réelle pour placer le bouton flottant
         onLayout={(e) => setHauteurBarre(e.nativeEvent.layout.height)}
@@ -527,7 +626,7 @@ function creerStyles(echelle: number) {
       borderTopWidth: 1,
       borderTopColor: "#E0E0E0",
     },
-    // Message affiché quand il n'y a aucune publication
+    // Message affiché quand il n'y a aucune publication ou aucun résultat
     vide: {
       textAlign: "center",
       color: GRIS,

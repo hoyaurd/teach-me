@@ -4,7 +4,7 @@
     "slug": "Teach-Me",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icone_hiboux.png",
+    "icon": "./assets/images/icone-bouton-flottant.png",
     "scheme": "teachme",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -15,15 +15,16 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/icone_hiboux.png",
-        "backgroundImage": "./assets/images/icone_hiboux.png",
+        "foregroundImage": "./assets/images/icone-bouton-flottant.png",
+        "backgroundImage": "./assets/images/icone-bouton-flottant.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/icone_hiboux.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/icone-bouton-flottant.png"
     },
     "plugins": [
       "expo-router",
@@ -31,13 +32,14 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icone-bouton-flottant.png",
           "imageWidth": 76
         }
       ],
       "expo-image",
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

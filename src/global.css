@@ -7,3 +7,51 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+/* Smartphones : 320px à 480px */
+@media (max-width: 480px) {
+  html,
+  body,
+  #root {
+    overflow-x: hidden;
+  }
+}
+
+/* Tablettes : 481px à 1024px */
+@media (min-width: 481px) and (max-width: 1024px) {
+  body {
+    background: #f4f6fb;
+  }
+}
+
+/* Ordinateurs : 1025px et plus */
+@media (min-width: 1025px) {
+  body {
+    background: #f4f6fb;
+  }
+}

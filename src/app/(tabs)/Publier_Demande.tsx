@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -16,6 +15,7 @@ import {
 } from "react-native";
 // NOUVEAU : fonction qui enregistre la publication dans Firestore
 import { creerPublication } from "../../lib/publications";
+import { alerte } from "../../lib/alerte";
 
 // --- Budget horaire proposé (ce que l'utilisateur est prêt à payer) ---
 const TARIFS_HORAIRES = [
@@ -230,12 +230,12 @@ export default function BesoinParentEleveScreen() {
   // --- Validation puis enregistrement dans Firestore ---
   const handleSave = async () => {
     if (!presentation.trim()) {
-      Alert.alert("Champ manquant", "La présentation est obligatoire.");
+      alerte("Champ manquant", "La présentation est obligatoire.");
       return;
     }
 
     if (!matiereRecherchee.trim()) {
-      Alert.alert("Champ manquant", "La matière recherchée est obligatoire.");
+      alerte("Champ manquant", "La matière recherchée est obligatoire.");
       return;
     }
 
@@ -254,7 +254,7 @@ export default function BesoinParentEleveScreen() {
 
       // L'alerte s'affiche seulement si l'enregistrement a réussi,
       // puis on redirige vers l'accueil quand l'utilisateur appuie sur "OK".
-      Alert.alert("Succès", "Votre recherche a été publiée !", [
+      alerte("Succès", "Votre recherche a été publiée !", [
         {
           text: "OK",
           onPress: () => router.push("/Acceuil"),
@@ -262,7 +262,7 @@ export default function BesoinParentEleveScreen() {
       ]);
     } catch (erreur) {
       console.log("Erreur publication :", erreur);
-      Alert.alert("Erreur", "Impossible de publier. Réessaie.");
+      alerte("Erreur", "Impossible de publier. Réessaie.");
     } finally {
       setLoading(false); // on réactive le bouton dans tous les cas
     }

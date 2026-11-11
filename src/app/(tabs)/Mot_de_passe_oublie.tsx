@@ -4,7 +4,6 @@ import { sendPasswordResetEmail } from "firebase/auth";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../lib/firebase";
+import { alerte } from "../../lib/alerte";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -37,14 +37,14 @@ export default function ForgotPasswordScreen() {
 
   async function envoyerLien() {
     if (!email.trim()) {
-      Alert.alert("Champ manquant", "Merci de saisir ton adresse email.");
+      alerte("Champ manquant", "Merci de saisir ton adresse email.");
       return;
     }
 
     // Vérification très simple du format email.
     const emailValide = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     if (!emailValide) {
-      Alert.alert(
+      alerte(
         "Email invalide",
         "Merci de saisir une adresse email valide.",
       );
@@ -58,7 +58,7 @@ export default function ForgotPasswordScreen() {
       setEnvoye(true); // on affiche l'écran de confirmation
     } catch (error: any) {
       console.log("Erreur Firebase :", error.code); // pour voir le code exact
-      Alert.alert("Erreur", messageErreur(error.code));
+      alerte("Erreur", messageErreur(error.code));
     } finally {
       setLoading(false); // on réactive le bouton dans tous les cas
     }

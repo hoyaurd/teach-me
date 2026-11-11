@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 // NOUVEAU : deleteUser pour annuler le compte si le numéro est déjà pris
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { deleteUser } from "firebase/auth";
 import { useState } from "react";
 import {
   ActivityIndicator,

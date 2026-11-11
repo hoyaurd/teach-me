@@ -1,18 +1,24 @@
 // Detail_Profil.tsx
 // Écran de détail d'une publication (service ou demande).
 // Reçoit les infos depuis l'accueil via router.push (params) :
-// id (uid de l'auteur), nom, photo, matiere, niveau, lieu, bio, tarif,
-// remuneration, lieuTravail, experience, precisions, type.
+// id (uid de l'auteur), pubId (id de la publication), nom, photo, matiere,
+// niveau, lieu, bio, tarif, remuneration, lieuTravail, experience,
+// precisions, type.
 //
 // Design simple : photo, nom, puis une liste "titre / valeur".
 //
 // Bouton du bas :
+// - c'est MA publication -> "Supprimer ma publication"
 // - pas encore de demande acceptée -> "Envoyer une demande"
 // - demande acceptée (dans un sens ou dans l'autre) ->
 //   deux boutons : "Contacter" (appel) et "Message" (ouvre la discussion)
 //
-// NOUVEAU : quand j'envoie une demande, l'autre personne reçoit une
+// Quand j'envoie une demande, l'autre personne reçoit une
 // notification push "Vous avez une nouvelle notification".
+//
+// Au-dessus du bouton "Envoyer une demande", on affiche les
+// chances que la demande soit acceptée (calcul fait dans l'app par le modèle).
+// Le calcul compare MON profil et le profil que je regarde.
 
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -20,6 +26,7 @@ import { getAuth } from "firebase/auth";
 import {
   addDoc,
   collection,
+  deleteDoc, // NOUVEAU : pour supprimer la publication
   doc,
   getDoc,
   onSnapshot,
@@ -29,9 +36,10 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  Alert,
+  Alert, // NOUVEAU : pour la confirmation de suppression
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,8 +47,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+// Le bloc qui affiche l'estimation (le dossier components est à côté de lib)
+import BlocEstimation from "../../components/BlocEstimation";
+import { alerte } from "../../lib/alerte";
+import type { InfosProfil } from "../../lib/calculerCompatibilite";
 import { db } from "../../lib/firebase";
-// NOUVEAU : pour envoyer la notification push
 import { envoyerPush } from "../../lib/notification";
 
 // Couleur principale de l'app (bleu Teach-Me).
@@ -60,6 +71,7 @@ export default function EcranProfil() {
   const params = useLocalSearchParams();
 
   const id = texte(params.id); // uid de l'auteur de la publication
+  const pubId = texte(params.pubId); // NOUVEAU : id du document "publications"
   const nom = texte(params.nom);
   const matiere = texte(params.matiere);
   const niveau = texte(params.niveau);
@@ -85,13 +97,24 @@ export default function EcranProfil() {
   // true pendant l'envoi (évite de cliquer deux fois).
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
 
+  // NOUVEAU : true pendant la suppression (évite de cliquer deux fois).
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+
   // true si une demande que J'AI envoyée à cette personne a été acceptée.
   const [accepteeEnvoyee, setAccepteeEnvoyee] = useState(false);
 
   // true si une demande que CETTE PERSONNE m'a envoyée a été acceptée par moi.
   const [accepteeRecue, setAccepteeRecue] = useState(false);
 
-  // Va chercher la photo et le téléphone de l'utilisateur dans Firestore.
+  // Profil complet de cette personne (le destinataire), lu dans "utilisateurs".
+  // null = pas encore chargé
+  const [profilDestinataire, setProfilDestinataire] = useState<any>(null);
+
+  // Mon propre profil complet (celui qui envoie la demande).
+  // null = pas encore chargé
+  const [monProfil, setMonProfil] = useState<any>(null);
+
+  // Va chercher la photo, le téléphone et le profil de l'utilisateur dans Firestore.
   useEffect(() => {
     if (!id) return; // pas d'id (ex : mon propre profil) : rien à chercher
 
@@ -102,10 +125,26 @@ export default function EcranProfil() {
           setPhoto(data.photoUrl ?? "");
           // On essaie plusieurs noms de champs courants pour le téléphone
           setTelephone(data.telephone ?? data.tel ?? data.phone ?? "");
+          // Profil du destinataire (pour l'estimation)
+          setProfilDestinataire(data);
         }
       })
       .catch(() => {}); // en cas d'erreur, on garde les valeurs par défaut
   }, [id]);
+
+  // Va chercher MON profil dans Firestore (pour l'estimation).
+  useEffect(() => {
+    const moi = getAuth().currentUser;
+    if (!moi) return;
+
+    getDoc(doc(db, "utilisateurs", moi.uid))
+      .then((snap) => {
+        if (snap.exists()) {
+          setMonProfil(snap.data());
+        }
+      })
+      .catch(() => {}); // en cas d'erreur, l'estimation ne sera simplement pas affichée
+  }, []);
 
   // Surveille en temps réel s'il existe une demande ACCEPTÉE
   // entre moi et cette personne (dans un sens ou dans l'autre).
@@ -161,6 +200,27 @@ export default function EcranProfil() {
   const estMonProfil = !nom;
   const estDemande = type === "demande";
 
+  // NOUVEAU : true si cette publication est la MIENNE
+  // (l'auteur de la publication = moi, et on connaît l'id de la publication).
+  const moiUid = getAuth().currentUser?.uid;
+  const estMaPublication = !!pubId && !!moiUid && moiUid === id;
+
+  // On affiche l'estimation seulement quand les deux profils sont chargés.
+  const estimationPrete = monProfil !== null && profilDestinataire !== null;
+
+  // Les deux profils à comparer, envoyés à BlocEstimation :
+  // - miennes : mon profil Firestore
+  // - vues : le profil Firestore de l'autre personne, complété par les infos
+  //   de la publication affichée (matière, niveau, lieu...) qui sont les plus précises.
+  const miennes = (monProfil ?? {}) as InfosProfil;
+  const vues = {
+    ...(profilDestinataire ?? {}),
+    matiere,
+    niveau,
+    lieu,
+    lieuTravail,
+  } as InfosProfil;
+
   // Liste des infos à afficher. Les lignes vides sont retirées par le filter.
   const infos = [
     { titre: "À propos", valeur: bio },
@@ -184,13 +244,13 @@ export default function EcranProfil() {
     // 1. Qui envoie ? L'utilisateur connecté.
     const moi = getAuth().currentUser;
     if (!moi) {
-      Alert.alert("Erreur", "Tu dois être connecté pour envoyer une demande.");
+      alerte("Erreur", "Tu dois être connecté pour envoyer une demande.");
       return;
     }
 
     // 2. On ne peut pas s'envoyer une demande à soi-même.
     if (!id || moi.uid === id) {
-      Alert.alert("Impossible", "Tu ne peux pas t'envoyer une demande.");
+      alerte("Impossible", "Tu ne peux pas t'envoyer une demande.");
       return;
     }
 
@@ -220,27 +280,64 @@ export default function EcranProfil() {
         creeLe: serverTimestamp(),
       });
 
-      // 5. NOUVEAU : notification push pour le destinataire
+      // 5. Notification push pour le destinataire
       // (il la reçoit même si son app est fermée).
       envoyerPush(id, "Vous avez une nouvelle notification");
 
       setDemandeEnvoyee(true);
-      Alert.alert("Demande envoyée", `Ta demande a bien été envoyée à ${nom}.`);
+      alerte("Demande envoyée", `Ta demande a bien été envoyée à ${nom}.`);
     } catch (erreur) {
       console.log("Erreur envoi demande :", erreur);
-      Alert.alert("Erreur", "Impossible d'envoyer la demande. Réessaie.");
+      alerte("Erreur", "Impossible d'envoyer la demande. Réessaie.");
     } finally {
       setEnvoiEnCours(false);
     }
   }
 
+  // NOUVEAU : supprime la publication dans Firestore, puis revient en arrière.
+  // (La règle Firestore refuse si ce n'est pas l'auteur.)
+  async function supprimerPublication() {
+    if (suppressionEnCours) return;
+
+    try {
+      setSuppressionEnCours(true);
+      await deleteDoc(doc(db, "publications", pubId));
+      router.back();
+    } catch (erreur) {
+      console.log("Erreur suppression publication :", erreur);
+      alerte("Erreur", "Impossible de supprimer la publication. Réessaie.");
+      setSuppressionEnCours(false);
+    }
+  }
+
+  // NOUVEAU : demande confirmation avant de supprimer.
+  function confirmerSuppression() {
+    Alert.alert(
+      "Supprimer la publication",
+      "Cette action est définitive. Continuer ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: supprimerPublication,
+        },
+      ],
+    );
+  }
+
   // "Contacter" -> ouvre l'application Téléphone avec le numéro.
   function contacter() {
     if (!telephone) {
-      Alert.alert(
+      alerte(
         "Numéro indisponible",
         `${nom} n'a pas encore renseigné son numéro de téléphone.`,
       );
+      return;
+    }
+    // Sur le site web (PC), un appel ne peut pas démarrer : on affiche le numéro
+    if (Platform.OS === "web") {
+      alerte(`Contacter ${nom}`, `Numéro : ${telephone}`);
       return;
     }
     Linking.openURL(`tel:${telephone}`);
@@ -295,50 +392,78 @@ export default function EcranProfil() {
       </ScrollView>
 
       {/* ---------- Barre du bas (fixée) ---------- */}
-      {!estMonProfil && (
+      {/* NOUVEAU : si c'est ma publication -> bouton Supprimer */}
+      {estMaPublication ? (
         <View style={styles.barreBas}>
-          {estAccepte ? (
-            // Demande acceptée : deux boutons
-            <View style={styles.ligneBoutons}>
-              <TouchableOpacity
-                style={[styles.bouton, styles.boutonMoitie]}
-                activeOpacity={0.8}
-                onPress={contacter}
-              >
-                <Ionicons name="call" size={20} color="#FFFFFF" />
-                <Text style={styles.boutonTexte}>Contacter</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.boutonContour, styles.boutonMoitie]}
-                activeOpacity={0.8}
-                onPress={envoyerMessage}
-              >
-                <Ionicons name="chatbubble-ellipses" size={20} color={BLEU} />
-                <Text style={styles.boutonTexteContour}>Message</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            // Pas encore acceptée : bouton "Envoyer une demande"
-            <TouchableOpacity
-              style={[
-                styles.bouton,
-                (demandeEnvoyee || envoiEnCours) && styles.boutonEnvoye,
-              ]}
-              activeOpacity={0.8}
-              onPress={envoyerDemande}
-              disabled={demandeEnvoyee || envoiEnCours}
-            >
-              <Text style={styles.boutonTexte}>
-                {demandeEnvoyee
-                  ? "Demande envoyée"
-                  : envoiEnCours
-                    ? "Envoi..."
-                    : "Envoyer une demande"}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.boutonSupprimer,
+              suppressionEnCours && styles.boutonEnvoye,
+            ]}
+            activeOpacity={0.8}
+            onPress={confirmerSuppression}
+            disabled={suppressionEnCours}
+          >
+            <Text style={styles.boutonTexte}>
+              {suppressionEnCours
+                ? "Suppression..."
+                : "Supprimer ma publication"}
+            </Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        !estMonProfil && (
+          <View style={styles.barreBas}>
+            {estAccepte ? (
+              // Demande acceptée : deux boutons
+              <View style={styles.ligneBoutons}>
+                <TouchableOpacity
+                  style={[styles.bouton, styles.boutonMoitie]}
+                  activeOpacity={0.8}
+                  onPress={contacter}
+                >
+                  <Ionicons name="call" size={20} color="#FFFFFF" />
+                  <Text style={styles.boutonTexte}>Contacter</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.boutonContour, styles.boutonMoitie]}
+                  activeOpacity={0.8}
+                  onPress={envoyerMessage}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={20} color={BLEU} />
+                  <Text style={styles.boutonTexteContour}>Message</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Pas encore acceptée : estimation + bouton "Envoyer une demande"
+              <View>
+                {/* Chances d'acceptation, avant l'envoi de la demande */}
+                {estimationPrete && !demandeEnvoyee && (
+                  <BlocEstimation miennes={miennes} vues={vues} />
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.bouton,
+                    (demandeEnvoyee || envoiEnCours) && styles.boutonEnvoye,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={envoyerDemande}
+                  disabled={demandeEnvoyee || envoiEnCours}
+                >
+                  <Text style={styles.boutonTexte}>
+                    {demandeEnvoyee
+                      ? "Demande envoyée"
+                      : envoiEnCours
+                        ? "Envoi..."
+                        : "Envoyer une demande"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )
       )}
     </SafeAreaView>
   );
@@ -424,6 +549,14 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "700",
+  },
+
+  // NOUVEAU : bouton rouge "Supprimer ma publication"
+  boutonSupprimer: {
+    backgroundColor: "#E53935",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
   },
 
   // --- Les deux boutons (demande acceptée) ---

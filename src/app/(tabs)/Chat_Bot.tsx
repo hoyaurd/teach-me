@@ -8,9 +8,11 @@
 // 3. L'app va lire ces publications dans Firestore et les affiche sous
 //    forme de CARTES, comme sur la page d'accueil.
 // 4. Un clic sur une carte ouvre le profil détaillé (Detail_Profil).
+// 5. Chaque échange (question + réponse) est enregistré dans l'historique
+//    IA (voir src/lib/historiqueIA.ts et la page Historique_IA).
 //
-// ATTENTION : le chemin de l'import "../lib/firebase" suppose que ce fichier
-// est dans src/app/. S'il est dans src/app/(tabs)/, mets "../../lib/firebase".
+// ATTENTION : le chemin de l'import "../../lib/firebase" suppose que ce
+// fichier est dans src/app/(tabs)/. S'il est dans src/app/, mets "../lib/...".
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -30,12 +32,14 @@ import {
   View,
 } from "react-native";
 import { db } from "../../lib/firebase";
+// Fonction qui enregistre un échange dans l'historique IA
+import { enregistrerEchange } from "../../lib/historiqueIA";
 
 // ---------- Réglages ----------
 
 // URL de PRODUCTION de ton webhook n8n (sans "-test").
 // Le workflow doit être "Publié" dans n8n pour qu'elle réponde.
-const URL_AGENT = "https://leviyeo.app.n8n.cloud/webhook/agent-teachme";
+const URL_AGENT = "https://soutenance.app.n8n.cloud/webhook/agent-teachme";
 
 // Temps maximum d'attente de la réponse de l'agent (en millisecondes)
 const DELAI_MAX = 45000;
@@ -383,10 +387,19 @@ export default function EcranChat() {
       // 4. Si des profils ont été trouvés, on affiche UNIQUEMENT les cartes
       //    (sans le texte de l'agent). Sinon, on affiche le texte de l'agent
       //    (par exemple une question pour préciser la recherche).
+      //    Dans les deux cas, on enregistre l'échange dans l'historique IA.
       if (profils.length > 0) {
         ajouterMessage("", "contact", profils);
+
+        // Historique : la "réponse" est la liste des noms proposés
+        const noms = profils.map((p: any) => p.nom).join(", ");
+        enregistrerEchange(texte, "Profils proposés : " + noms);
       } else {
-        ajouterMessage(reponseAgent.texte || "Je n'ai rien trouvé.", "contact");
+        const texteReponse = reponseAgent.texte || "Je n'ai rien trouvé.";
+        ajouterMessage(texteReponse, "contact");
+
+        // Historique : la réponse est le texte de l'agent
+        enregistrerEchange(texte, texteReponse);
       }
     } catch (erreur) {
       // 5. En cas de problème, on affiche un message clair

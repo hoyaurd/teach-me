@@ -1,41 +1,61 @@
+// Page de bienvenue.
+// - Téléphone : l'image en haut, la carte blanche en bas (comme avant).
+// - Site web grand écran : l'image à gauche, la carte à droite (2 colonnes).
+
 import { useRouter } from "expo-router";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
 export default function WelcomeScreen() {
   // useRouter permet de naviguer vers une autre page quand on clique sur un bouton
   const router = useRouter();
 
+  // Grand écran : seulement sur le web, quand la fenêtre est assez large
+  const { width } = useWindowDimensions();
+  const grand = Platform.OS === "web" && width >= 900;
+
   return (
-    <View style={styles.container}>
-      {/* Image du haut : le professeur avec l'élève */}
+    <View style={[styles.container, grand && styles.containerGrand]}>
+      {/* Image : le professeur avec l'élève */}
       <Image
         source={require("../../../assets/images/Image_Page_acceuil.jpeg")}
-        style={styles.image}
+        style={[styles.image, grand && styles.imageGrand]}
         resizeMode="cover"
       />
 
-      {/* Carte blanche arrondie qui contient le texte et les boutons */}
-      <View style={styles.card}>
-        <Text style={styles.title}>Bienvenue</Text>
-        <Text style={styles.subtitle}>
-          Trouvez l'accompagnateur pédagogique qu'il vous faut
-        </Text>
+      {/* Carte blanche qui contient le texte et les boutons */}
+      <View style={[styles.card, grand && styles.cardGrand]}>
+        <View style={grand ? styles.contenuGrand : styles.contenu}>
+          <Text style={[styles.title, grand && styles.titleGrand]}>
+            Bienvenue
+          </Text>
+          <Text style={styles.subtitle}>
+            Trouvez l'accompagnateur pédagogique qu'il vous faut
+          </Text>
 
-        {/* Bouton bleu plein "Se connecter" */}
-        <TouchableOpacity
-          style={styles.buttonPrimary}
-          onPress={() => router.push("/Connection")}
-        >
-          <Text style={styles.buttonPrimaryText}>Se connecter</Text>
-        </TouchableOpacity>
+          {/* Bouton bleu plein "Se connecter" */}
+          <TouchableOpacity
+            style={styles.buttonPrimary}
+            onPress={() => router.push("/Connection")}
+          >
+            <Text style={styles.buttonPrimaryText}>Se connecter</Text>
+          </TouchableOpacity>
 
-        {/* Bouton bleu contour "Créer un compte" */}
-        <TouchableOpacity
-          style={styles.buttonOutline}
-          onPress={() => router.push("/(tabs)/Creer un compte2")}
-        >
-          <Text style={styles.buttonOutlineText}>Créer un compte</Text>
-        </TouchableOpacity>
+          {/* Bouton bleu contour "Créer un compte" */}
+          <TouchableOpacity
+            style={styles.buttonOutline}
+            onPress={() => router.push("/(tabs)/Creer un compte2")}
+          >
+            <Text style={styles.buttonOutlineText}>Créer un compte</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -58,6 +78,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 18,
     paddingTop: 20,
+    alignItems: "center",
+  },
+  // Contenu de la carte (téléphone) : prend toute la largeur
+  contenu: {
+    width: "100%",
     alignItems: "center",
   },
   title: {
@@ -99,5 +124,33 @@ const styles = StyleSheet.create({
     color: "#2563EB",
     fontSize: 18,
     fontWeight: "bold",
+  },
+
+  // ---------- Grand écran (site web) ----------
+  containerGrand: {
+    flexDirection: "row", // image à gauche, carte à droite
+  },
+  imageGrand: {
+    width: "50%",
+    height: "100%",
+  },
+  cardGrand: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center", // contenu centré verticalement
+    paddingHorizontal: 40,
+    paddingTop: 0,
+  },
+  // Contenu limité à 420 px, centré dans la moitié droite
+  contenuGrand: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "center",
+  },
+  titleGrand: {
+    fontSize: 32,
+    marginBottom: 12,
   },
 });

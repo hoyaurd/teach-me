@@ -8,8 +8,13 @@
 //
 // Aucune donnée d'exemple : tant qu'il n'y a pas de message, la liste est vide.
 // La photo de chaque contact est lue dans Firestore (AvatarContact).
-// NOUVEAU : une conversation avec un message non lu affiche un point rouge
+// Une conversation avec un message non lu affiche un point rouge
 // à droite et son dernier message en gras (champ "nonLuPar" = mon uid).
+//
+// NOUVEAU : la barre du bas s'adapte à tous les téléphones.
+// Elle respecte la zone de sécurité (boutons Android, barre de gestes
+// iPhone) grâce à useSafeAreaInsets, comme sur l'écran d'accueil.
+// Ainsi les onglets ne sont plus coupés sur certains téléphones.
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -27,19 +32,24 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+// NOUVEAU : SafeAreaView et useSafeAreaInsets viennent de cette bibliothèque
+// (le SafeAreaView de react-native ne protège pas bien sur Android)
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
 // Choisit la bonne page de publication selon le profil (comme sur l'accueil)
 import { getRoutePublier } from "../../lib/Profil";
 // Points rouges : nouvelle notification (demande) et nouveau message
+import { useBarreLaterale } from "../../lib/useBarreLaterale";
 import {
   useNouveauMessage,
   useNouvelleNotification,
@@ -137,6 +147,12 @@ function AvatarContact({ uid }: { uid: string }) {
 
 export default function MessagesScreen() {
   const router = useRouter();
+  // Site web grand écran : le menu latéral remplace la barre du bas
+  const barreLaterale = useBarreLaterale();
+
+  // NOUVEAU : zones de sécurité du téléphone (barre de gestes, boutons Android)
+  const insets = useSafeAreaInsets();
+
   const [recherche, setRecherche] = useState("");
   // Onglet actif de la barre du bas : "Messages" puisqu'on est sur cette page.
   const [ongletActif, setOngletActif] = useState("Messages");
@@ -175,7 +191,7 @@ export default function MessagesScreen() {
             nom: data.noms?.[autreId] ?? "Utilisateur",
             dernierMessage: data.dernierMessage ?? "",
             dernierMessageLe: data.dernierMessageLe ?? null,
-            // NOUVEAU : true si le dernier message n'a pas encore été lu par moi
+            // true si le dernier message n'a pas encore été lu par moi
             nonLu: data.nonLuPar === moi.uid,
           };
         });
@@ -223,7 +239,9 @@ export default function MessagesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.conteneur}>
+    // NOUVEAU : on protège seulement le haut et les côtés.
+    // Le bas est géré à la main sur la barre de navigation (voir plus bas).
+    <SafeAreaView style={styles.conteneur} edges={["top", "left", "right"]}>
       {/* KeyboardAvoidingView : quand le clavier s'ouvre, le contenu remonte
           et la liste se rétrécit pour laisser la place. */}
       <KeyboardAvoidingView
@@ -277,7 +295,7 @@ export default function MessagesScreen() {
                   <Text style={styles.nomContact} numberOfLines={1}>
                     {conversation.nom}
                   </Text>
-                  {/* NOUVEAU : dernier message en gras s'il n'est pas lu */}
+                  {/* Dernier message en gras s'il n'est pas lu */}
                   <Text
                     style={[
                       styles.dernierMessage,
@@ -289,7 +307,7 @@ export default function MessagesScreen() {
                   </Text>
                 </View>
 
-                {/* Heure du dernier message + NOUVEAU : point rouge si non lu */}
+                {/* Heure du dernier message + point rouge si non lu */}
                 <View style={styles.colonneDroite}>
                   <Text style={styles.heure}>
                     {formaterHeure(conversation.dernierMessageLe)}
@@ -302,7 +320,17 @@ export default function MessagesScreen() {
         </ScrollView>
 
         {/* ---------- Barre de navigation du bas ---------- */}
-        <View style={styles.barreNavigation}>
+        <View
+          style={[
+            styles.barreNavigation,
+            // NOUVEAU : l'espace du bas s'adapte au téléphone
+            // (barre de gestes iPhone, boutons Android).
+            // Math.max(..., 12) garantit toujours un minimum d'espace.
+            { paddingBottom: Math.max(insets.bottom, 12) + 4 },
+            // Site web grand écran : le menu latéral remplace la barre du bas
+            barreLaterale && { display: "none" },
+          ]}
+        >
           {ONGLETS.map((onglet) => {
             const estActif = ongletActif === onglet.cle;
 
@@ -345,6 +373,7 @@ export default function MessagesScreen() {
                     styles.libelleOnglet,
                     estActif && styles.libelleOngletActif,
                   ]}
+                  numberOfLines={1}
                 >
                   {onglet.label}
                 </Text>
@@ -358,12 +387,11 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Le SafeAreaView de react-native ne protège pas la barre d'état sur
-  // Android : on ajoute sa hauteur nous-mêmes en haut de l'écran.
+  // NOUVEAU : plus besoin de paddingTop avec StatusBar.currentHeight,
+  // le SafeAreaView de react-native-safe-area-context protège le haut.
   conteneur: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0,
   },
   // Le KeyboardAvoidingView doit occuper tout l'écran (flex: 1).
   zoneClavier: {
@@ -442,12 +470,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: GRIS,
   },
-  // NOUVEAU : dernier message en gras et plus foncé quand il n'est pas lu
+  // Dernier message en gras et plus foncé quand il n'est pas lu
   dernierMessageNonLu: {
     fontWeight: "700",
     color: "#1A1A1A",
   },
-  // NOUVEAU : heure en haut, point rouge en dessous (colonne de droite)
+  // Heure en haut, point rouge en dessous (colonne de droite)
   colonneDroite: {
     alignItems: "flex-end",
     gap: 6,
@@ -456,7 +484,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: GRIS,
   },
-  // NOUVEAU : point rouge d'une conversation non lue
+  // Point rouge d'une conversation non lue
   pastilleNonLu: {
     width: 12,
     height: 12,
@@ -465,16 +493,20 @@ const styles = StyleSheet.create({
   },
 
   // --- Barre de navigation du bas ---
+  // NOUVEAU : le paddingBottom n'est plus fixé ici, il est ajouté dans le
+  // composant selon la zone de sécurité du téléphone.
   barreNavigation: {
     flexDirection: "row",
-    justifyContent: "space-around",
     alignItems: "center",
     borderTopWidth: 1,
     borderTopColor: "#E5E5E5",
     paddingTop: 12,
-    paddingBottom: 22,
+    backgroundColor: "#FFFFFF",
   },
+  // NOUVEAU : flex: 1 -> les 5 onglets se partagent la largeur à égalité,
+  // même sur un tout petit écran (avant : space-around)
   onglet: {
+    flex: 1,
     alignItems: "center",
   },
   libelleOnglet: {

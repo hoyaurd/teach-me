@@ -5,7 +5,6 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +24,7 @@ import {
   TypeProfil,
   Utilisateur,
 } from "../../lib/utilisateurs";
+import { alerte } from "../../lib/alerte";
 
 // Couleur principale de l'app (bleu Teach-Me).
 const BLEU = "#2E3FCB";
@@ -183,7 +183,7 @@ export default function EcranModifierProfil() {
         photoUrl: photo,
       });
 
-      Alert.alert(
+      alerte(
         "Profil mis à jour",
         "Tes modifications ont été enregistrées.",
       );

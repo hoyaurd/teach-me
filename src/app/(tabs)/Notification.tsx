@@ -25,7 +25,6 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -37,7 +36,9 @@ import { db } from "../../lib/firebase";
 // NOUVEAU : pour envoyer la notification push
 import { envoyerPush } from "../../lib/notification";
 // Choisit la bonne page de publication selon le profil (comme sur l'accueil)
+import { alerte } from "../../lib/alerte";
 import { getRoutePublier } from "../../lib/Profil";
+import { useBarreLaterale } from "../../lib/useBarreLaterale";
 
 // Couleur principale de l'app (bleu Teach-Me).
 const BLEU = "#2E3FCB";
@@ -96,6 +97,8 @@ function formaterDate(creeLe: any): string {
 
 export default function EcranNotification() {
   const router = useRouter();
+  // Site web grand écran : le menu latéral remplace la barre du bas
+  const barreLaterale = useBarreLaterale();
 
   // Demandes que j'ai REÇUES
   const [recues, setRecues] = useState<any[]>([]);
@@ -214,7 +217,7 @@ export default function EcranNotification() {
       }
     } catch (erreur) {
       console.log("Erreur réponse demande :", erreur);
-      Alert.alert("Erreur", "Impossible d'enregistrer ta réponse. Réessaie.");
+      alerte("Erreur", "Impossible d'enregistrer ta réponse. Réessaie.");
     }
   }
 
@@ -343,7 +346,9 @@ export default function EcranNotification() {
       )}
 
       {/* ---------- Barre de navigation du bas ---------- */}
-      <View style={styles.barreNavigation}>
+      <View
+        style={[styles.barreNavigation, barreLaterale && { display: "none" }]}
+      >
         {ONGLETS.map((onglet) => {
           const estActif = ongletActif === onglet.cle;
 

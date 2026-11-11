@@ -1,0 +1,12 @@
+{
+  "colonnes": [
+    "match_matiere",
+    "match_niveau",
+    "match_lieu",
+    "match_remuneration",
+    "match_lieuTravail"
+  ],
+  "coefficients": [1.2, 1.2, 1.2, 1.2, 1.2],
+  "intercept": -2,
+  "seuils": { "elevees": 0.7, "moyennes": 0.4 }
+}

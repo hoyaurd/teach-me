@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth } from "../../lib/firebase";
 import { lireProfil, Utilisateur } from "../../lib/utilisateurs";
+import { useBarreLaterale } from "../../lib/useBarreLaterale";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -115,6 +116,8 @@ function ligneInfo(icone: IoniconName, label: string, valeur?: string | null) {
 
 export default function EcranProfil() {
   const router = useRouter();
+  // Site web grand écran : le menu latéral remplace la barre du bas
+  const barreLaterale = useBarreLaterale();
   const [ongletActif, setOngletActif] = useState("Profil");
 
   // Les infos de l'utilisateur, lues dans Firestore (vide au départ)
@@ -221,7 +224,9 @@ export default function EcranProfil() {
       )}
 
       {/* ---------- Barre de navigation du bas ---------- */}
-      <View style={styles.barreNavigation}>
+      <View
+        style={[styles.barreNavigation, barreLaterale && { display: "none" }]}
+      >
         {ONGLETS.map((onglet) => {
           const estActif = ongletActif === onglet.cle;
 
